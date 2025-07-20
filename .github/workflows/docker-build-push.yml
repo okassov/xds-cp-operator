@@ -43,7 +43,7 @@ jobs:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
           # Branch name for non-main branches
-          type=ref,event=branch,enable={{!is_default_branch}}
+          type=ref,event=branch
           # PR number for pull requests  
           type=ref,event=pr
           # Semver tags for version releases
