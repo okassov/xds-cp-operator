@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox-curl
+  namespace: xds-system
+spec:
+  restartPolicy: Never
+  securityContext: {}
+  containers:
+  - name: busybox-curl
+    image: yauritux/busybox-curl
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      runAsNonRoot: false
+      allowPrivilegeEscalation: true
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "BusyBox with curl ready for exec."
+      sleep 3600
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"

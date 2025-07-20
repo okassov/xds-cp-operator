@@ -64,21 +64,19 @@ operator:
   enableLeaderElection: true
   probes:
     livenessProbe:
-      httpGet:
-        path: /healthz
-        port: 8081
+      tcpSocket:
+        port: 8082
       initialDelaySeconds: 30
       periodSeconds: 30
-      timeoutSeconds: 10
+      timeoutSeconds: 5
       failureThreshold: 3
       successThreshold: 1
     readinessProbe:
-      httpGet:
-        path: /readyz
-        port: 8081
+      tcpSocket:
+        port: 8082
       initialDelaySeconds: 15
       periodSeconds: 15
-      timeoutSeconds: 10
+      timeoutSeconds: 5
       failureThreshold: 3
       successThreshold: 1
 
