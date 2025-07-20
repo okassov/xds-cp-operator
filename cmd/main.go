@@ -29,14 +29,6 @@ func main() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(api.AddToScheme(scheme))
 
-	// Debug: Check if XDSControlPlane is recognized
-	fmt.Fprintf(os.Stderr, "Checking for XDSControlPlane: %v\n", scheme.Recognizes(api.GroupVersion.WithKind("XDSControlPlane")))
-
-	// Debug: List all known types in the scheme
-	for k := range scheme.AllKnownTypes() {
-		fmt.Fprintf(os.Stderr, "Registered type: %s, Kind=%s\n", k.GroupVersion().String(), k.Kind)
-	}
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 	})

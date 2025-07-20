@@ -5,5 +5,65 @@ metadata:
     app.kubernetes.io/name: xds-cp-operator
     app.kubernetes.io/managed-by: kustomize
   name: xdscontrolplane-sample
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  xdsPort: 18000
+  # Multiple Envoy node IDs that will receive this configuration
+  nodeIDs:
+    - external-envoy
+    - envoy-proxy-1
+    - envoy-proxy-2
+  listeners:
+    - name: ingress_http
+      address: 0.0.0.0
+      port: 80
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typedConfig:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: ingress_http
+                cluster: nodeport-30080
+    - name: ingress_https
+      address: 0.0.0.0
+      port: 443
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typedConfig:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: ingress_https
+                cluster: nodeport-30443-with-proxy-protocol
+  clusters:
+    - name: nodeport-30080
+      type: strict_dns
+      lbPolicy: round_robin
+      connectTimeout: 1s
+      loadAssignment:
+        endpointsFrom:
+          type: Node
+          selector:
+            matchLabels:
+              kubernetes.io/hostname: infra-mycar-k8s-worker-shared-02
+          port: 30080
+    - name: nodeport-30443-with-proxy-protocol
+      type: strict_dns
+      lbPolicy: round_robin
+      connectTimeout: 1s
+      transportSocket:
+        name: envoy.transport_sockets.upstream_proxy_protocol
+        typedConfig:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.proxy_protocol.v3.ProxyProtocolUpstreamTransport
+          config:
+            version: V1
+          transport_socket:
+            name: envoy.transport_sockets.raw_buffer
+            typedConfig:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.raw_buffer.v3.RawBuffer
+      loadAssignment:
+        endpointsFrom:
+          type: Node
+          selector:
+            matchLabels:
+              kubernetes.io/hostname: infra-mycar-k8s-worker-shared-02
+          port: 30443

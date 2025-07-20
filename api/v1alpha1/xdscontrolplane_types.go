@@ -60,18 +60,62 @@ type RouteConfigSpec struct {
 }
 
 type XDSControlPlaneSpec struct {
-	XdsPort   int               `json:"xdsPort"`
-	Listeners []ListenerSpec    `json:"listeners"`
-	Clusters  []ClusterSpec     `json:"clusters"`
-	Routes    []RouteConfigSpec `json:"routes,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	XdsPort int `json:"xdsPort"`
+
+	// +kubebuilder:validation:Optional
+	// NodeIDs specifies the list of Envoy node IDs that should receive this configuration
+	// If empty, defaults to ["external-envoy"]
+	NodeIDs []string `json:"nodeIDs,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Listeners []ListenerSpec `json:"listeners"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Clusters []ClusterSpec `json:"clusters"`
+
+	// +kubebuilder:validation:Optional
+	Routes []RouteConfigSpec `json:"routes,omitempty"`
+}
+
+// XDSControlPlaneStatus defines the observed state of XDSControlPlane
+type XDSControlPlaneStatus struct {
+	// Phase represents the current phase of the XDSControlPlane
+	// +kubebuilder:validation:Enum=Pending;Ready;Error
+	Phase string `json:"phase,omitempty"`
+
+	// Conditions represent the latest available observations of the XDSControlPlane's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ConnectedNodeIDs lists the Envoy node IDs currently connected to the xDS server
+	// +optional
+	ConnectedNodeIDs []string `json:"connectedNodeIDs,omitempty"`
+
+	// XdsServerAddress is the address where the xDS server is listening
+	// +optional
+	XdsServerAddress string `json:"xdsServerAddress,omitempty"`
+
+	// LastSnapshotVersion indicates the version of the last successfully created snapshot
+	// +optional
+	LastSnapshotVersion string `json:"lastSnapshotVersion,omitempty"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="XDS Port",type=integer,JSONPath=`.spec.xdsPort`
+// +kubebuilder:printcolumn:name="Connected Nodes",type=string,JSONPath=`.status.connectedNodeIDs`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type XDSControlPlane struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec XDSControlPlaneSpec `json:"spec,omitempty"`
+	Spec   XDSControlPlaneSpec   `json:"spec,omitempty"`
+	Status XDSControlPlaneStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
