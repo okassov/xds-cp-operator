@@ -1,0 +1,164 @@
+# Production values for xds-cp-operator
+# This is a YAML-formatted file for production deployment.
+
+# Operator image configuration
+image:
+  repository: okassov/xds-cp-operator
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"  # Use specific version in production
+
+# High availability setup
+replicaCount: 2
+
+# Service Account configuration
+serviceAccount:
+  create: true
+  annotations:
+    # Add any cloud-specific annotations here
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/xds-operator-role
+
+# Production resource allocation
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+
+# Enable autoscaling for production workloads
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Node scheduling preferences
+nodeSelector:
+  kubernetes.io/os: linux
+  # node-role.kubernetes.io/worker: "true"
+
+# Tolerations for dedicated nodes (optional)
+tolerations:
+- key: node-role.kubernetes.io/control-plane
+  effect: NoSchedule
+  
+# Anti-affinity to spread replicas across nodes
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - xds-cp-operator
+        topologyKey: kubernetes.io/hostname
+
+# Operator configuration for production
+operator:
+  metricsAddr: ":8082"
+  enableLeaderElection: true
+  probes:
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8081
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 10
+      failureThreshold: 3
+      successThreshold: 1
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: 8081
+      initialDelaySeconds: 15
+      periodSeconds: 15
+      timeoutSeconds: 10
+      failureThreshold: 3
+      successThreshold: 1
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8082
+  annotations:
+    # prometheus.io/scrape: "true"
+    # prometheus.io/port: "8082"
+
+# XDS Service configuration for external Envoy proxies in production
+xdsService:
+  enabled: true
+  type: LoadBalancer  # Use LoadBalancer for external access in production
+  portRange:
+    start: 18000
+    end: 18020  # Extended range for production workloads
+  annotations:
+    # AWS NLB configuration
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "false"
+    # GCP configuration
+    # cloud.google.com/load-balancer-type: "External"
+    # Azure configuration  
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+  # Restrict access to trusted networks
+  loadBalancerSourceRanges:
+    - "10.0.0.0/8"      # Internal networks
+    - "172.16.0.0/12"   # Private networks
+    - "192.168.0.0/16"  # Local networks
+    # Add your specific network ranges here
+    # - "203.0.113.0/24"  # Example public range
+
+# Enable monitoring in production
+serviceMonitor:
+  enabled: true
+  namespace: monitoring  # Adjust to your monitoring namespace
+  labels:
+    app: prometheus
+  interval: 30s
+  scrapeTimeout: 10s
+
+# RBAC configuration
+rbac:
+  create: true
+  # Add any extra rules if needed
+  extraRules: []
+
+# Security contexts
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+
+# Pod annotations for monitoring/logging
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8082"
+  prometheus.io/path: "/metrics"
+
+# Common labels for all resources
+commonLabels:
+  environment: production
+  team: platform
+
+# Common annotations for all resources
+commonAnnotations:
+  managed-by: helm
+  contact: platform-team@company.com 

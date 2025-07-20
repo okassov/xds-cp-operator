@@ -1,0 +1,140 @@
+🎉 XDS Control Plane Operator has been successfully installed!
+
+📦 Release Name: {{ .Release.Name }}
+🔧 Namespace: {{ .Release.Namespace }}
+📝 Chart Version: {{ .Chart.Version }}
+🏷️  App Version: {{ .Chart.AppVersion }}
+
+{{- if .Values.serviceAccount.create }}
+✅ Service Account: {{ include "xds-cp-operator.serviceAccountName" . }}
+{{- end }}
+
+{{- if .Values.rbac.create }}
+✅ RBAC: ClusterRole and bindings created
+{{- end }}
+
+📊 Operator Configuration:
+   • Replicas: {{ .Values.replicaCount }}
+   • Metrics Address: {{ .Values.operator.metricsAddr }}
+   • Leader Election: {{ .Values.operator.enableLeaderElection }}
+   • Image: {{ include "xds-cp-operator.image" . }}
+
+{{- if .Values.xdsService.enabled }}
+🌐 XDS Service Configuration:
+   • Service Type: {{ .Values.xdsService.type }}
+   • Port Range: {{ .Values.xdsService.portRange.start }}-{{ .Values.xdsService.portRange.end }}
+   • Service Name: {{ include "xds-cp-operator.fullname" . }}-xds
+{{- if eq .Values.xdsService.type "LoadBalancer" }}
+   • External Access: LoadBalancer (check external IP)
+   • Get LoadBalancer IP: kubectl get svc {{ include "xds-cp-operator.fullname" . }}-xds -n {{ .Release.Namespace }}
+{{- else if eq .Values.xdsService.type "NodePort" }}
+   • External Access: NodePort
+   • Get NodePorts: kubectl get svc {{ include "xds-cp-operator.fullname" . }}-xds -n {{ .Release.Namespace }}
+{{- else }}
+   • External Access: ClusterIP (internal only)
+{{- end }}
+{{- else }}
+⚠️  XDS Service disabled - external Envoy proxies cannot connect
+{{- end }}
+
+{{- if .Values.serviceMonitor.enabled }}
+📈 Monitoring:
+   • ServiceMonitor enabled for Prometheus
+   • Metrics available at: http://{{ include "xds-cp-operator.fullname" . }}-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}/metrics
+{{- else }}
+📈 Monitoring:
+   • Metrics available at: http://{{ include "xds-cp-operator.fullname" . }}-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}/metrics
+   • To enable Prometheus monitoring, set serviceMonitor.enabled=true
+{{- end }}
+
+{{- if .Values.autoscaling.enabled }}
+⚖️  Autoscaling:
+   • HPA enabled: {{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas
+   • CPU Target: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}%
+{{- if .Values.autoscaling.targetMemoryUtilizationPercentage }}
+   • Memory Target: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}%
+{{- end }}
+{{- end }}
+
+🚀 What's Next?
+
+1. Check operator status:
+   kubectl get deployment {{ include "xds-cp-operator.fullname" . }} -n {{ .Release.Namespace }}
+
+2. View operator logs:
+   kubectl logs -f deployment/{{ include "xds-cp-operator.fullname" . }} -n {{ .Release.Namespace }}
+
+{{- if .Values.xdsService.enabled }}
+3. Check xDS service status:
+   kubectl get svc {{ include "xds-cp-operator.fullname" . }}-xds -n {{ .Release.Namespace }}
+
+{{- if eq .Values.xdsService.type "LoadBalancer" }}
+4. Get LoadBalancer external IP (may take a few minutes):
+   kubectl get svc {{ include "xds-cp-operator.fullname" . }}-xds -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+{{- else if eq .Values.xdsService.type "NodePort" }}
+4. Get NodePort for external access:
+   kubectl get svc {{ include "xds-cp-operator.fullname" . }}-xds -n {{ .Release.Namespace }} -o jsonpath='{.spec.ports[0].nodePort}'
+
+{{- end }}
+{{- end }}
+
+5. Create your first XDS Control Plane:
+   cat <<EOF | kubectl apply -f -
+   apiVersion: xds.okassov/v1alpha1
+   kind: XDSControlPlane
+   metadata:
+     name: example-xds
+     namespace: default
+   spec:
+     xdsPort: {{ .Values.xdsService.portRange.start }}
+     nodeIDs:
+       - "envoy-proxy-1"
+     clusters:
+       - name: backend-service
+         type: static
+         lbPolicy: round_robin
+         connectTimeout: 5s
+     listeners:
+       - name: main-listener
+         address: 0.0.0.0
+         port: 8080
+         filterChains:
+           - filters:
+               - name: envoy.filters.network.tcp_proxy
+                 typedConfig:
+                   "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                   cluster: backend-service
+                   stat_prefix: tcp_proxy
+   EOF
+
+6. Check XDS Control Plane status:
+   kubectl get xdscontrolplane example-xds -o wide
+
+📚 Documentation:
+   • Chart README: https://github.com/okassov/xds-cp-operator/tree/main/deploy/chart
+   • Operator README: https://github.com/okassov/xds-cp-operator
+   • Health Checks Guide: See repository documentation
+   • External Envoy Setup: Chart README has Envoy configuration examples
+
+💡 Tips:
+   • Use 'helm get values {{ .Release.Name }} -n {{ .Release.Namespace }}' to see current configuration
+   • Use 'helm upgrade {{ .Release.Name }} deploy/chart/ -n {{ .Release.Namespace }}' to upgrade
+   • Monitor operator metrics for performance insights
+{{- if .Values.xdsService.enabled }}
+   • Test xDS connectivity: kubectl port-forward svc/{{ include "xds-cp-operator.fullname" . }}-xds {{ .Values.xdsService.portRange.start }}:{{ .Values.xdsService.portRange.start }} -n {{ .Release.Namespace }}
+{{- end }}
+
+{{- if not .Values.serviceMonitor.enabled }}
+
+⚠️  Consider enabling monitoring in production:
+   helm upgrade {{ .Release.Name }} deploy/chart/ -n {{ .Release.Namespace }} --set serviceMonitor.enabled=true
+
+{{- end }}
+
+{{- if not .Values.xdsService.enabled }}
+
+⚠️  XDS Service is disabled. To enable external Envoy access:
+   helm upgrade {{ .Release.Name }} deploy/chart/ -n {{ .Release.Namespace }} --set xdsService.enabled=true
+
+{{- end }} 

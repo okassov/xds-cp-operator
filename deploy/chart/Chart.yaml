@@ -1,0 +1,19 @@
+apiVersion: v2
+name: xds-cp-operator
+description: A Helm chart for XDS Control Plane Operator - Kubernetes operator for managing Envoy xDS control planes
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - envoy
+  - xds
+  - control-plane
+  - operator
+home: https://github.com/okassov/xds-cp-operator
+sources:
+  - https://github.com/okassov/xds-cp-operator
+maintainers:
+  - name: okassov
+    email: marat.okassov@gmail.com
+annotations:
+  category: Networking 

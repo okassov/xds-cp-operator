@@ -1,0 +1,160 @@
+# Default values for xds-cp-operator
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Operator image configuration
+image:
+  repository: okassov/xds-cp-operator
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Service Account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext: 
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+
+# Operator deployment configuration
+replicaCount: 1
+
+# Resources configuration
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+# Autoscaling configuration
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Operator configuration
+operator:
+  # Metrics server configuration
+  metricsAddr: ":8082"
+  # Enable leader election
+  enableLeaderElection: true
+  # Probe configuration
+  probes:
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8081
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 10
+      failureThreshold: 3
+      successThreshold: 1
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: 8081
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+      successThreshold: 1
+
+# Service configuration for metrics
+service:
+  type: ClusterIP
+  port: 8082
+  targetPort: 8082
+  annotations: {}
+
+# XDS Service configuration for external Envoy proxies
+xdsService:
+  # Whether to create a service for xDS connections
+  enabled: true
+  # Service type: ClusterIP, NodePort, or LoadBalancer
+  type: ClusterIP
+  # Port range for xDS servers (will expose ports in this range)
+  portRange:
+    start: 18000
+    end: 18010
+  # Annotations for the xDS service
+  annotations: {}
+  # LoadBalancer IP (only used when type is LoadBalancer)
+  loadBalancerIP: ""
+  # LoadBalancer source ranges (only used when type is LoadBalancer)
+  loadBalancerSourceRanges: []
+  # External IPs (only used when type is ClusterIP)
+  externalIPs: []
+  # Node port range (only used when type is NodePort)
+  nodePortRange:
+    start: 30000
+    end: 30010
+
+# ServiceMonitor for Prometheus (if prometheus-operator is installed)
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  labels: {}
+  annotations: {}
+  interval: 30s
+  scrapeTimeout: 10s
+
+# RBAC configuration
+rbac:
+  # Specifies whether RBAC resources should be created
+  create: true
+  # Custom ClusterRole rules (merged with default rules)
+  extraRules: []
+
+# CRDs installation
+crds:
+  # Whether to install CRDs as part of the chart
+  install: true
+  # Whether to create RBAC for CRDs
+  createRBAC: true
+
+# Common labels to add to all resources
+commonLabels: {}
+
+# Common annotations to add to all resources  
+commonAnnotations: {} 

@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xds-cp-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xds-cp-operator.labels" . | nindent 4 }}
+  {{- with (include "xds-cp-operator.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "xds-cp-operator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (include "xds-cp-operator.annotations" .) }}
+        {{- . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "xds-cp-operator.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "xds-cp-operator.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: manager
+        image: {{ include "xds-cp-operator.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --metrics-bind-address={{ .Values.operator.metricsAddr }}
+        {{- if .Values.operator.enableLeaderElection }}
+        - --leader-elect
+        {{- end }}
+        ports:
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        - containerPort: {{ trimPrefix ":" .Values.operator.metricsAddr }}
+          name: metrics
+          protocol: TCP
+        {{- if .Values.xdsService.enabled }}
+        {{- range $port := until (int (sub (add .Values.xdsService.portRange.end 1) .Values.xdsService.portRange.start)) }}
+        - containerPort: {{ add $.Values.xdsService.portRange.start $port }}
+          name: xds-{{ add $.Values.xdsService.portRange.start $port }}
+          protocol: TCP
+        {{- end }}
+        {{- end }}
+        {{- with .Values.operator.probes.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.operator.probes.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        env:
+        - name: WATCH_NAMESPACE
+          value: ""
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 10 

@@ -1,0 +1,46 @@
+{{- if .Values.xdsService.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xds-cp-operator.fullname" . }}-xds
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xds-cp-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: xds
+  {{- with .Values.xdsService.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (include "xds-cp-operator.annotations" .) }}
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.xdsService.type }}
+  {{- if .Values.xdsService.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.xdsService.loadBalancerIP }}
+  {{- end }}
+  {{- with .Values.xdsService.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.xdsService.externalIPs }}
+  externalIPs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  ports:
+  {{- range $port := until (int (sub (add .Values.xdsService.portRange.end 1) .Values.xdsService.portRange.start)) }}
+  {{- $actualPort := add $.Values.xdsService.portRange.start $port }}
+  - port: {{ $actualPort }}
+    targetPort: {{ $actualPort }}
+    protocol: TCP
+    name: xds-{{ $actualPort }}
+    {{- if and (eq $.Values.xdsService.type "NodePort") ($.Values.xdsService.nodePortRange) }}
+    {{- $nodePort := add $.Values.xdsService.nodePortRange.start $port }}
+    {{- if le (int $nodePort) (int $.Values.xdsService.nodePortRange.end) }}
+    nodePort: {{ $nodePort }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
+  selector:
+    {{- include "xds-cp-operator.selectorLabels" . | nindent 4 }}
+{{- end }} 

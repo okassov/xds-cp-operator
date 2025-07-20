@@ -1,0 +1,134 @@
+{{- if .Values.rbac.create -}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "xds-cp-operator.clusterRoleName" . }}
+  labels:
+    {{- include "xds-cp-operator.labels" . | nindent 4 }}
+  {{- with (include "xds-cp-operator.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - xds.okassov
+  resources:
+  - xdscontrolplanes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - xds.okassov
+  resources:
+  - xdscontrolplanes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - xds.okassov
+  resources:
+  - xdscontrolplanes/status
+  verbs:
+  - get
+  - patch
+  - update
+{{- with .Values.rbac.extraRules }}
+{{- toYaml . | nindent 0 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "xds-cp-operator.clusterRoleBindingName" . }}
+  labels:
+    {{- include "xds-cp-operator.labels" . | nindent 4 }}
+  {{- with (include "xds-cp-operator.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "xds-cp-operator.clusterRoleName" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "xds-cp-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "xds-cp-operator.leaderElectionRoleName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xds-cp-operator.labels" . | nindent 4 }}
+  {{- with (include "xds-cp-operator.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "xds-cp-operator.leaderElectionRoleBindingName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xds-cp-operator.labels" . | nindent 4 }}
+  {{- with (include "xds-cp-operator.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "xds-cp-operator.leaderElectionRoleName" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "xds-cp-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }} 

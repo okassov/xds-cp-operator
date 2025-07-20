@@ -8,6 +8,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -30,13 +31,25 @@ func main() {
 	utilruntime.Must(api.AddToScheme(scheme))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: ":8082", // Changed from default :8080 to avoid conflict
+		Scheme:                 scheme,
+		MetricsBindAddress:     ":8082", // Changed from default :8080 to avoid conflict
+		HealthProbeBindAddress: ":8081", // Health check endpoint
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start manager: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Add health check endpoints
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to setup healthz check: %v\n", err)
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to setup readyz check: %v\n", err)
+		os.Exit(1)
+	}
+
 	if err = (&controller.XDSControlPlaneReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
