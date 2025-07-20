@@ -1,135 +1,75 @@
-# xds-cp-operator
-// TODO(user): Add simple overview of use/purpose
+# XDS Control Plane Operator
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+Kubernetes operator for managing Envoy xDS control plane configurations.
 
-## Getting Started
+## Features
 
-### Prerequisites
-- go version v1.24.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- Multiple Envoy node ID support
+- Comprehensive status tracking with phases and conditions  
+- Lifecycle management for xDS servers
+- Universal Envoy type support through fallback mechanism
+- Proxy protocol transport socket support
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+## Supported Envoy Types
 
-```sh
-make docker-build docker-push IMG=<some-registry>/xds-cp-operator:tag
-```
+### Explicitly Supported (optimized):
+- `envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy`
+- `envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager`
+- `envoy.extensions.transport_sockets.proxy_protocol.v3.ProxyProtocolUpstreamTransport`
+- `envoy.extensions.transport_sockets.raw_buffer.v3.RawBuffer`
+- `envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext`
+- `envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext`
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+### Universal Support:
+Any valid Envoy type URL (e.g., `type.googleapis.com/envoy.extensions.*`) is automatically supported through the universal fallback mechanism.
 
-**Install the CRDs into the cluster:**
+## Quick Start
 
-```sh
+1. Install the operator:
+```bash
 make install
+make run
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=<some-registry>/xds-cp-operator:tag
+2. Apply sample configuration:
+```bash
+kubectl apply -f config/samples/xds_v1alpha1_xdscontrolplane.yaml
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+## Configuration Examples
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
-
-```sh
-kubectl apply -k config/samples/
+### Basic TCP Proxy with Proxy Protocol:
+```yaml
+apiVersion: xds.okassov/v1alpha1
+kind: XDSControlPlane
+metadata:
+  name: example
+spec:
+  xdsPort: 18000
+  nodeIDs:
+    - envoy-1
+    - envoy-2
+  clusters:
+    - name: backend
+      type: strict_dns
+      transportSocket:
+        name: envoy.transport_sockets.upstream_proxy_protocol
+        typedConfig:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.proxy_protocol.v3.ProxyProtocolUpstreamTransport
+          config:
+            version: V1
+          transport_socket:
+            name: envoy.transport_sockets.raw_buffer
+            typedConfig:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.raw_buffer.v3.RawBuffer
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+## Development
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
+```bash
+make build
+make test
+make generate
+make manifests
 ```
-
-**Delete the APIs(CRDs) from the cluster:**
-
-```sh
-make uninstall
-```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/xds-cp-operator:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/xds-cp-operator/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-operator-sdk edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 
