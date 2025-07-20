@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- xds_v1alpha1_xdscontrolplane.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
