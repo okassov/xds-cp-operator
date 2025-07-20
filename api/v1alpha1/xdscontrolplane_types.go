@@ -31,21 +31,31 @@ type ClusterSpec struct {
 	LoadAssignment  *LoadAssignmentSpec  `json:"loadAssignment,omitempty"`
 }
 
+// FilterSpec defines the Envoy filter configuration
 type FilterSpec struct {
 	Name        string               `json:"name"`
-	TypedConfig apiextensionsv1.JSON `json:"typedConfig,omitempty"`
+	TypedConfig apiextensionsv1.JSON `json:"typedConfig"`
 }
 
 type FilterChainSpec struct {
 	Filters []FilterSpec `json:"filters"`
 }
 
+// ListenerSpec defines the Envoy listener configuration
 type ListenerSpec struct {
 	Name            string            `json:"name"`
 	Address         string            `json:"address"`
 	Port            int               `json:"port"`
 	ListenerFilters []string          `json:"listenerFilters,omitempty"`
 	FilterChains    []FilterChainSpec `json:"filterChains"`
+	// +kubebuilder:validation:Optional
+	AccessLog []AccessLogSpec `json:"accessLog,omitempty"`
+}
+
+// AccessLogSpec defines access log configuration
+type AccessLogSpec struct {
+	Name        string               `json:"name"`
+	TypedConfig apiextensionsv1.JSON `json:"typedConfig"`
 }
 
 type VirtualHostSpec struct {

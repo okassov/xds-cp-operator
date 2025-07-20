@@ -37,10 +37,6 @@ import (
 	http_connection_manager "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	tcp_proxy "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
 
-	// Access loggers
-	accesslog "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
-	file_access_log "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/file/v3"
-
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -512,20 +508,6 @@ func (r *XDSControlPlaneReconciler) buildListener(l api.ListenerSpec) (*listener
 		fc = append(fc, &listener.FilterChain{Filters: filters})
 	}
 
-	// Process access logs
-	var accessLogs []*accesslog.AccessLog
-	for _, al := range l.AccessLog {
-		anyConfig, err := r.jsonToAny(al.Name, al.TypedConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert access log config: %w", err)
-		}
-		accessLogs = append(accessLogs, &accesslog.AccessLog{
-			Name: al.Name,
-			ConfigType: &accesslog.AccessLog_TypedConfig{
-				TypedConfig: anyConfig,
-			},
-		})
-	}
 	return &listener.Listener{
 		Name: l.Name,
 		Address: &core.Address{
@@ -538,7 +520,6 @@ func (r *XDSControlPlaneReconciler) buildListener(l api.ListenerSpec) (*listener
 		},
 		ListenerFilters: lf,
 		FilterChains:    fc,
-		AccessLog:       accessLogs,
 	}, nil
 }
 
@@ -658,14 +639,6 @@ func (r *XDSControlPlaneReconciler) jsonToAny(typeURL string, in apiextensionsv1
 		if err := protojson.Unmarshal(filteredJSON, &msg); err != nil {
 			log.Error(err, "failed to unmarshal raw_buffer transport config")
 			return nil, fmt.Errorf("failed to unmarshal raw_buffer transport config: %w", err)
-		}
-		return anypb.New(&msg)
-
-	case "type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog":
-		var msg file_access_log.FileAccessLog
-		if err := protojson.Unmarshal(filteredJSON, &msg); err != nil {
-			log.Error(err, "failed to unmarshal file_access_log config")
-			return nil, fmt.Errorf("failed to unmarshal file_access_log config: %w", err)
 		}
 		return anypb.New(&msg)
 

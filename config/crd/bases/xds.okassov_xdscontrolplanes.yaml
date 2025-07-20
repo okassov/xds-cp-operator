@@ -142,7 +142,21 @@ spec:
                 type: array
               listeners:
                 items:
+                  description: ListenerSpec defines the Envoy listener configuration
                   properties:
+                    accessLog:
+                      items:
+                        description: AccessLogSpec defines access log configuration
+                        properties:
+                          name:
+                            type: string
+                          typedConfig:
+                            x-kubernetes-preserve-unknown-fields: true
+                        required:
+                        - name
+                        - typedConfig
+                        type: object
+                      type: array
                     address:
                       type: string
                     filterChains:
@@ -150,6 +164,7 @@ spec:
                         properties:
                           filters:
                             items:
+                              description: FilterSpec defines the Envoy filter configuration
                               properties:
                                 name:
                                   type: string
@@ -157,6 +172,7 @@ spec:
                                   x-kubernetes-preserve-unknown-fields: true
                               required:
                               - name
+                              - typedConfig
                               type: object
                             type: array
                         required:
