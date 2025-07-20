@@ -1,0 +1,235 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            # Extract changelog for current version
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            
+            # Get changelog section for this version
+            sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' > current_changelog.md
+            if [ -s current_changelog.md ]; then
+              echo "changelog<<EOF" >> $GITHUB_OUTPUT
+              cat current_changelog.md >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "changelog=Release $VERSION" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "changelog=Release ${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## XDS Control Plane Operator ${{ github.ref_name }}
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ### 🐳 Docker Images
+            
+            ```bash
+            docker pull okassov/xds-cp-operator:${{ github.ref_name }}
+            docker pull okassov/xds-cp-operator:latest
+            ```
+            
+            ### 📦 Installation
+            
+            ```bash
+            # Install CRDs
+            kubectl apply -f https://github.com/okassov/xds-cp-operator/releases/download/${{ github.ref_name }}/xds-cp-operator-crds.yaml
+            
+            # Deploy operator
+            kubectl apply -f https://github.com/okassov/xds-cp-operator/releases/download/${{ github.ref_name }}/xds-cp-operator.yaml
+            ```
+            
+            ### 📋 Full Changelog
+            
+            **Full Changelog**: https://github.com/okassov/xds-cp-operator/compare/v0.1.0...${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+
+  build-manifests:
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install controller-gen
+        run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+
+      - name: Generate CRDs
+        run: make manifests
+
+      - name: Prepare release manifests
+        run: |
+          # Create CRDs manifest
+          cp config/crd/bases/xds.okassov_xdscontrolplanes.yaml xds-cp-operator-crds.yaml
+          
+          # Create operator manifest (this would need to be customized based on your deployment setup)
+          mkdir -p release-manifests
+          
+          # Generate operator deployment manifest
+          cat > xds-cp-operator.yaml << 'EOF'
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: xds-cp-operator-system
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: xds-cp-operator-controller-manager
+            namespace: xds-cp-operator-system
+            labels:
+              app: xds-cp-operator
+              control-plane: controller-manager
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: xds-cp-operator
+                control-plane: controller-manager
+            template:
+              metadata:
+                labels:
+                  app: xds-cp-operator
+                  control-plane: controller-manager
+              spec:
+                containers:
+                - name: manager
+                  image: okassov/xds-cp-operator:${{ github.ref_name }}
+                  imagePullPolicy: Always
+                  command:
+                  - /manager
+                  ports:
+                  - containerPort: 8082
+                    name: metrics
+                    protocol: TCP
+                  livenessProbe:
+                    httpGet:
+                      path: /healthz
+                      port: 8081
+                    initialDelaySeconds: 15
+                    periodSeconds: 20
+                  readinessProbe:
+                    httpGet:
+                      path: /readyz
+                      port: 8081
+                    initialDelaySeconds: 5
+                    periodSeconds: 10
+                  resources:
+                    limits:
+                      cpu: 500m
+                      memory: 128Mi
+                    requests:
+                      cpu: 10m
+                      memory: 64Mi
+                serviceAccountName: xds-cp-operator-controller-manager
+          ---
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: xds-cp-operator-controller-manager
+            namespace: xds-cp-operator-system
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: xds-cp-operator-manager-role
+          rules:
+          - apiGroups:
+            - xds.okassov
+            resources:
+            - xdscontrolplanes
+            verbs:
+            - create
+            - delete
+            - get
+            - list
+            - patch
+            - update
+            - watch
+          - apiGroups:
+            - xds.okassov
+            resources:
+            - xdscontrolplanes/finalizers
+            verbs:
+            - update
+          - apiGroups:
+            - xds.okassov
+            resources:
+            - xdscontrolplanes/status
+            verbs:
+            - get
+            - patch
+            - update
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: xds-cp-operator-manager-rolebinding
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: xds-cp-operator-manager-role
+          subjects:
+          - kind: ServiceAccount
+            name: xds-cp-operator-controller-manager
+            namespace: xds-cp-operator-system
+          EOF
+
+      - name: Upload CRDs manifest
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./xds-cp-operator-crds.yaml
+          asset_name: xds-cp-operator-crds.yaml
+          asset_content_type: application/yaml
+
+      - name: Upload operator manifest
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./xds-cp-operator.yaml
+          asset_name: xds-cp-operator.yaml
+          asset_content_type: application/yaml 

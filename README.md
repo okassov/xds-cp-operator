@@ -1,5 +1,12 @@
 # XDS Control Plane Operator
 
+[![Build and Push Docker Image](https://github.com/okassov/xds-cp-operator/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/okassov/xds-cp-operator/actions/workflows/docker-build-push.yml)
+[![Release](https://github.com/okassov/xds-cp-operator/actions/workflows/release.yml/badge.svg)](https://github.com/okassov/xds-cp-operator/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/okassov/xds-cp-operator)](https://goreportcard.com/report/github.com/okassov/xds-cp-operator)
+[![Docker Pulls](https://img.shields.io/docker/pulls/okassov/xds-cp-operator)](https://hub.docker.com/r/okassov/xds-cp-operator)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/okassov/xds-cp-operator)](https://github.com/okassov/xds-cp-operator/releases)
+[![License](https://img.shields.io/github/license/okassov/xds-cp-operator)](LICENSE)
+
 Kubernetes operator for managing Envoy xDS control plane configurations with advanced health monitoring capabilities.
 
 ## ✨ Features
@@ -73,24 +80,54 @@ spec:
 
 ## 🚀 Quick Start
 
-### 1. Install the Operator
+### Option 1: Using Docker Image (Recommended)
+
+```bash
+# Install CRDs
+kubectl apply -f https://github.com/okassov/xds-cp-operator/releases/latest/download/xds-cp-operator-crds.yaml
+
+# Deploy operator
+kubectl apply -f https://github.com/okassov/xds-cp-operator/releases/latest/download/xds-cp-operator.yaml
+
+# Apply sample configuration
+kubectl apply -f https://raw.githubusercontent.com/okassov/xds-cp-operator/main/config/samples/xds_v1alpha1_xdscontrolplane.yaml
+```
+
+### Option 2: Local Development
+
 ```bash
 # Install CRDs
 make install
 
-# Run the operator
+# Run the operator locally
 make run
 ```
 
-### 2. Deploy Basic Configuration
+### Verify Installation
 ```bash
-kubectl apply -f config/samples/xds_v1alpha1_xdscontrolplane.yaml
-```
+# Check operator status
+kubectl get pods -n xds-cp-operator-system
 
-### 3. Verify Status
-```bash
+# Create and verify XDSControlPlane
+kubectl apply -f config/samples/xds_v1alpha1_xdscontrolplane.yaml
 kubectl get xdscontrolplane
 kubectl describe xdscontrolplane example
+```
+
+### 🐳 Docker Images
+
+Available on [Docker Hub](https://hub.docker.com/r/okassov/xds-cp-operator):
+
+```bash
+# Pull latest version
+docker pull okassov/xds-cp-operator:latest
+
+# Pull specific version
+docker pull okassov/xds-cp-operator:v1.0.0
+
+# Multi-platform support
+docker pull okassov/xds-cp-operator:latest --platform linux/amd64
+docker pull okassov/xds-cp-operator:latest --platform linux/arm64
 ```
 
 ## 📖 Configuration Examples
