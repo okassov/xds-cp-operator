@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	xdsv1alpha1 "github.com/okassov/xds-cp-operator/api/v1alpha1"
@@ -51,7 +52,40 @@ var _ = Describe("XDSControlPlane Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: xdsv1alpha1.XDSControlPlaneSpec{
+						XdsPort: 18000,
+						NodeIDs: []string{"test-envoy"},
+						Listeners: []xdsv1alpha1.ListenerSpec{
+							{
+								Name:    "test-listener",
+								Address: "0.0.0.0",
+								Port:    80,
+								FilterChains: []xdsv1alpha1.FilterChainSpec{
+									{
+										Filters: []xdsv1alpha1.FilterSpec{
+											{
+												Name: "envoy.filters.network.tcp_proxy",
+												TypedConfig: apiextensionsv1.JSON{
+													Raw: []byte(`{
+														"@type": "type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy",
+														"stat_prefix": "test",
+														"cluster": "test-cluster"
+													}`),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						Clusters: []xdsv1alpha1.ClusterSpec{
+							{
+								Name:     "test-cluster",
+								Type:     "static",
+								LbPolicy: "round_robin",
+							},
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}

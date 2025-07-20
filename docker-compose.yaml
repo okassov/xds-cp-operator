@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Test backend service with health endpoint
+  test-backend:
+    image: nginx:alpine
+    ports:
+      - "8081:80"  # Changed from 8080 to 8081
+    volumes:
+      - ./test-configs/nginx.conf:/etc/nginx/nginx.conf
+      - ./test-configs/health.html:/usr/share/nginx/html/health
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Simple HTTP server for TCP health check testing
+  tcp-backend:
+    image: python:3.9-alpine
+    ports:
+      - "9091:9090"  # Changed from 9090 to 9091
+    volumes:
+      - ./test-configs/tcp-server.py:/app/tcp-server.py
+    command: ["python3", "/app/tcp-server.py"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 9090)); s.close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Envoy proxy that will connect to our XDS Control Plane
+  envoy:
+    image: envoyproxy/envoy:v1.28-latest
+    ports:
+      - "10000:10000"  # Envoy admin interface
+      - "8000:8000"    # HTTP proxy port
+      - "8001:8001"    # TCP proxy port  
+    volumes:
+      - ./test-configs/envoy-bootstrap.yaml:/etc/envoy/envoy.yaml
+    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--log-level", "debug"]
+    depends_on:
+      - test-backend
+      - tcp-backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:10000/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3 

@@ -27,6 +27,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	envoytype "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	// Transport sockets
 	proxy_protocol "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/proxy_protocol/v3"
@@ -44,6 +45,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"sync"
 
@@ -485,7 +487,171 @@ func (r *XDSControlPlaneReconciler) buildCluster(ctx context.Context, c api.Clus
 		}
 	}
 
+	// Handle health check configuration
+	if c.HealthCheck != nil {
+		healthCheck, err := r.buildHealthCheck(c.HealthCheck)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to build health check config: %w", err)
+		}
+		clusterObj.HealthChecks = []*core.HealthCheck{healthCheck}
+		log.Info("Added health check to cluster", "healthCheck", healthCheck)
+	}
+
 	return clusterObj, cla, nil
+}
+
+func (r *XDSControlPlaneReconciler) buildHealthCheck(hc *api.HealthCheckSpec) (*core.HealthCheck, error) {
+	healthCheck := &core.HealthCheck{}
+
+	// Set timeout
+	if hc.Timeout != "" {
+		timeout, err := time.ParseDuration(hc.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("invalid health check timeout: %w", err)
+		}
+		healthCheck.Timeout = durationpb.New(timeout)
+	} else {
+		healthCheck.Timeout = durationpb.New(5 * time.Second) // Default timeout
+	}
+
+	// Set interval
+	if hc.Interval != "" {
+		interval, err := time.ParseDuration(hc.Interval)
+		if err != nil {
+			return nil, fmt.Errorf("invalid health check interval: %w", err)
+		}
+		healthCheck.Interval = durationpb.New(interval)
+	} else {
+		healthCheck.Interval = durationpb.New(10 * time.Second) // Default interval
+	}
+
+	// Set interval jitter
+	if hc.IntervalJitter != "" {
+		jitter, err := time.ParseDuration(hc.IntervalJitter)
+		if err != nil {
+			return nil, fmt.Errorf("invalid health check interval jitter: %w", err)
+		}
+		healthCheck.IntervalJitter = durationpb.New(jitter)
+	}
+
+	// Set thresholds
+	if hc.UnhealthyThreshold > 0 {
+		healthCheck.UnhealthyThreshold = wrapperspb.UInt32(uint32(hc.UnhealthyThreshold))
+	} else {
+		healthCheck.UnhealthyThreshold = wrapperspb.UInt32(3)
+	}
+
+	if hc.HealthyThreshold > 0 {
+		healthCheck.HealthyThreshold = wrapperspb.UInt32(uint32(hc.HealthyThreshold))
+	} else {
+		healthCheck.HealthyThreshold = wrapperspb.UInt32(2)
+	}
+
+	// Set reuse connection
+	healthCheck.ReuseConnection = wrapperspb.Bool(hc.ReuseConnection)
+
+	// Configure specific health check type
+	if hc.HTTPHealthCheck != nil {
+		httpHC, err := r.buildHTTPHealthCheck(hc.HTTPHealthCheck)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build HTTP health check: %w", err)
+		}
+		healthCheck.HealthChecker = &core.HealthCheck_HttpHealthCheck_{
+			HttpHealthCheck: httpHC,
+		}
+	} else if hc.TCPHealthCheck != nil {
+		tcpHC := r.buildTCPHealthCheck(hc.TCPHealthCheck)
+		healthCheck.HealthChecker = &core.HealthCheck_TcpHealthCheck_{
+			TcpHealthCheck: tcpHC,
+		}
+	} else if hc.GRPCHealthCheck != nil {
+		grpcHC := r.buildGRPCHealthCheck(hc.GRPCHealthCheck)
+		healthCheck.HealthChecker = &core.HealthCheck_GrpcHealthCheck_{
+			GrpcHealthCheck: grpcHC,
+		}
+	} else {
+		// Default to TCP health check if no specific type is configured
+		tcpHC := &core.HealthCheck_TcpHealthCheck{}
+		healthCheck.HealthChecker = &core.HealthCheck_TcpHealthCheck_{
+			TcpHealthCheck: tcpHC,
+		}
+	}
+
+	return healthCheck, nil
+}
+
+func (r *XDSControlPlaneReconciler) buildHTTPHealthCheck(hc *api.HTTPHealthCheckSpec) (*core.HealthCheck_HttpHealthCheck, error) {
+	httpHC := &core.HealthCheck_HttpHealthCheck{
+		Path: hc.Path,
+	}
+
+	if hc.Host != "" {
+		httpHC.Host = hc.Host
+	}
+
+	// Add request headers
+	for _, header := range hc.RequestHeadersToAdd {
+		httpHC.RequestHeadersToAdd = append(httpHC.RequestHeadersToAdd, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:   header.Header.Key,
+				Value: header.Header.Value,
+			},
+			Append: wrapperspb.Bool(header.Append),
+		})
+	}
+
+	// Add expected status codes
+	for _, statusRange := range hc.ExpectedStatuses {
+		httpHC.ExpectedStatuses = append(httpHC.ExpectedStatuses, &envoytype.Int64Range{
+			Start: statusRange.Start,
+			End:   statusRange.End,
+		})
+	}
+
+	// Default expected status if none specified
+	if len(httpHC.ExpectedStatuses) == 0 {
+		httpHC.ExpectedStatuses = []*envoytype.Int64Range{
+			{Start: 200, End: 299},
+		}
+	}
+
+	return httpHC, nil
+}
+
+func (r *XDSControlPlaneReconciler) buildTCPHealthCheck(hc *api.TCPHealthCheckSpec) *core.HealthCheck_TcpHealthCheck {
+	tcpHC := &core.HealthCheck_TcpHealthCheck{}
+
+	if len(hc.Send) > 0 {
+		tcpHC.Send = &core.HealthCheck_Payload{
+			Payload: &core.HealthCheck_Payload_Binary{
+				Binary: hc.Send,
+			},
+		}
+	}
+
+	for _, receive := range hc.Receive {
+		tcpHC.Receive = append(tcpHC.Receive, &core.HealthCheck_Payload{
+			Payload: &core.HealthCheck_Payload_Binary{
+				Binary: receive,
+			},
+		})
+	}
+
+	return tcpHC
+}
+
+func (r *XDSControlPlaneReconciler) buildGRPCHealthCheck(hc *api.GRPCHealthCheckSpec) *core.HealthCheck_GrpcHealthCheck {
+	grpcHC := &core.HealthCheck_GrpcHealthCheck{}
+
+	if hc.ServiceName != "" {
+		grpcHC.ServiceName = hc.ServiceName
+	}
+
+	if hc.Authority != "" {
+		grpcHC.Authority = hc.Authority
+	}
+
+	return grpcHC
 }
 
 func (r *XDSControlPlaneReconciler) buildListener(l api.ListenerSpec) (*listener.Listener, error) {

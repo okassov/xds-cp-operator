@@ -122,6 +122,23 @@ spec:
       type: strict_dns
       lbPolicy: round_robin
       connectTimeout: 1s
+      transportSocket:
+        name: envoy.transport_sockets.upstream_proxy_protocol
+        typedConfig:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.proxy_protocol.v3.ProxyProtocolUpstreamTransport
+          config:
+            version: V1
+          transport_socket:
+            name: envoy.transport_sockets.raw_buffer
+            typedConfig:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.raw_buffer.v3.RawBuffer
+      healthCheck:
+        timeout: 5s
+        interval: 15s
+        unhealthyThreshold: 5
+        healthyThreshold: 3
+        reuseConnection: false
+        tcpHealthCheck: {}
       loadAssignment:
         endpointsFrom:
           type: Node

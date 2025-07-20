@@ -55,6 +55,128 @@ spec:
                   properties:
                     connectTimeout:
                       type: string
+                    healthCheck:
+                      description: HealthCheckSpec defines health check configuration
+                        for a cluster
+                      properties:
+                        grpcHealthCheck:
+                          description: GRPCHealthCheck specifies gRPC health check
+                            configuration
+                          properties:
+                            authority:
+                              description: Authority specifies the :authority header
+                                value to use in gRPC health checks
+                              type: string
+                            serviceName:
+                              description: ServiceName specifies the service name
+                                to use in gRPC health checks
+                              type: string
+                          type: object
+                        healthyThreshold:
+                          description: HealthyThreshold specifies the number of healthy
+                            health checks before marking the host as healthy
+                          format: int32
+                          type: integer
+                        httpHealthCheck:
+                          description: HTTPHealthCheck specifies HTTP health check
+                            configuration
+                          properties:
+                            expectedStatuses:
+                              description: ExpectedStatuses specifies the expected
+                                HTTP status codes for a successful health check
+                              items:
+                                description: HTTPStatusRangeSpec defines HTTP status
+                                  code range
+                                properties:
+                                  end:
+                                    format: int64
+                                    maximum: 599
+                                    minimum: 100
+                                    type: integer
+                                  start:
+                                    format: int64
+                                    maximum: 599
+                                    minimum: 100
+                                    type: integer
+                                required:
+                                - end
+                                - start
+                                type: object
+                              type: array
+                            host:
+                              description: Host specifies the value of the host header
+                                in the HTTP health check request
+                              type: string
+                            path:
+                              description: Path specifies the HTTP path for health
+                                checks
+                              type: string
+                            requestHeadersToAdd:
+                              description: RequestHeadersToAdd specifies headers to
+                                add to health check requests
+                              items:
+                                description: HeaderValueOptionSpec defines header
+                                  value configuration
+                                properties:
+                                  append:
+                                    type: boolean
+                                  header:
+                                    description: HeaderValueSpec defines header name
+                                      and value
+                                    properties:
+                                      key:
+                                        type: string
+                                      value:
+                                        type: string
+                                    required:
+                                    - key
+                                    - value
+                                    type: object
+                                required:
+                                - header
+                                type: object
+                              type: array
+                          required:
+                          - path
+                          type: object
+                        interval:
+                          description: Interval specifies the interval between health
+                            checks
+                          type: string
+                        intervalJitter:
+                          description: IntervalJitter specifies the amount of jitter
+                            to add to the interval
+                          type: string
+                        reuseConnection:
+                          description: ReuseConnection specifies whether to reuse
+                            health check connections
+                          type: boolean
+                        tcpHealthCheck:
+                          description: TCPHealthCheck specifies TCP health check configuration
+                          properties:
+                            receive:
+                              description: Receive specifies the bytes expected in
+                                response during TCP health check
+                              items:
+                                format: byte
+                                type: string
+                              type: array
+                            send:
+                              description: Send specifies the bytes to send during
+                                TCP health check
+                              format: byte
+                              type: string
+                          type: object
+                        timeout:
+                          description: Timeout specifies the time to wait for a health
+                            check response
+                          type: string
+                        unhealthyThreshold:
+                          description: UnhealthyThreshold specifies the number of
+                            unhealthy health checks before marking the host as unhealthy
+                          format: int32
+                          type: integer
+                      type: object
                     lbPolicy:
                       type: string
                     loadAssignment:

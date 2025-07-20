@@ -1,0 +1,151 @@
+apiVersion: xds.okassov/v1alpha1
+kind: XDSControlPlane
+metadata:
+  labels:
+    app.kubernetes.io/name: xds-cp-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: xdscontrolplane-healthcheck-sample
+  namespace: default
+spec:
+  xdsPort: 18000
+  nodeIDs:
+    - external-envoy
+  listeners:
+    # HTTP listener for web services
+    - name: web_listener
+      address: 0.0.0.0
+      port: 80
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typedConfig:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: web_proxy
+                cluster: web-backend
+
+    # TCP listener for database connections
+    - name: database_listener
+      address: 0.0.0.0
+      port: 5432
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typedConfig:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: db_proxy
+                cluster: postgres-backend
+
+    # gRPC listener
+    - name: grpc_listener
+      address: 0.0.0.0
+      port: 9090
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typedConfig:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: grpc_proxy
+                cluster: grpc-backend
+
+  clusters:
+    # Web backend cluster with HTTP health checks
+    - name: web-backend
+      type: strict_dns
+      lbPolicy: round_robin
+      connectTimeout: 5s
+      loadAssignment:
+        endpointsFrom:
+          type: Node
+          selector:
+            matchLabels:
+              node-role.kubernetes.io/worker: ""
+          port: 30080
+      healthCheck:
+        timeout: 3s
+        interval: 10s
+        intervalJitter: 1s
+        unhealthyThreshold: 3
+        healthyThreshold: 2
+        reuseConnection: true
+        httpHealthCheck:
+          path: /health
+          host: web-service.local
+          requestHeadersToAdd:
+            - header:
+                key: "X-Health-Check"
+                value: "envoy"
+              append: false
+            - header:
+                key: "User-Agent"
+                value: "envoy-healthchecker/1.0"
+              append: false
+          expectedStatuses:
+            - start: 200
+              end: 299
+            - start: 404
+              end: 404
+
+    # Database cluster with TCP health checks
+    - name: postgres-backend
+      type: strict_dns
+      lbPolicy: round_robin
+      connectTimeout: 5s
+      loadAssignment:
+        endpointsFrom:
+          type: Node
+          selector:
+            matchLabels:
+              node-role.kubernetes.io/worker: ""
+          port: 30432
+      healthCheck:
+        timeout: 5s
+        interval: 15s
+        unhealthyThreshold: 5
+        healthyThreshold: 3
+        reuseConnection: false
+        tcpHealthCheck:
+          send: "U0VMRUNUIDEh"  # Base64 for "SELECT 1!"
+          receive:
+            - "MQ=="  # Base64 for "1"
+
+    # gRPC backend cluster with gRPC health checks
+    - name: grpc-backend
+      type: strict_dns
+      lbPolicy: least_request
+      connectTimeout: 3s
+      loadAssignment:
+        endpointsFrom:
+          type: Node
+          selector:
+            matchLabels:
+              node-role.kubernetes.io/worker: ""
+          port: 30090
+      healthCheck:
+        timeout: 2s
+        interval: 8s
+        intervalJitter: 500ms
+        unhealthyThreshold: 2
+        healthyThreshold: 1
+        reuseConnection: true
+        grpcHealthCheck:
+          serviceName: "myapp.v1.HealthService"
+          authority: "grpc-service.local"
+
+    # Simple cluster with default TCP health check (no specific configuration)
+    - name: simple-backend
+      type: static
+      lbPolicy: round_robin
+      connectTimeout: 1s
+      loadAssignment:
+        endpointsFrom:
+          type: Node
+          selector:
+            matchLabels:
+              app: simple-service
+          port: 8080
+      healthCheck:
+        timeout: 1s
+        interval: 5s
+        unhealthyThreshold: 3
+        healthyThreshold: 2
+        # No specific health check type configured - will default to TCP 

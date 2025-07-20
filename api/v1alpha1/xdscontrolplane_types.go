@@ -22,6 +22,117 @@ type TransportSocketSpec struct {
 	TypedConfig apiextensionsv1.JSON `json:"typedConfig,omitempty"`
 }
 
+// HealthCheckSpec defines health check configuration for a cluster
+type HealthCheckSpec struct {
+	// +kubebuilder:validation:Optional
+	// Timeout specifies the time to wait for a health check response
+	Timeout string `json:"timeout,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// Interval specifies the interval between health checks
+	Interval string `json:"interval,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// IntervalJitter specifies the amount of jitter to add to the interval
+	IntervalJitter string `json:"intervalJitter,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// UnhealthyThreshold specifies the number of unhealthy health checks before marking the host as unhealthy
+	UnhealthyThreshold int32 `json:"unhealthyThreshold,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// HealthyThreshold specifies the number of healthy health checks before marking the host as healthy
+	HealthyThreshold int32 `json:"healthyThreshold,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// ReuseConnection specifies whether to reuse health check connections
+	ReuseConnection bool `json:"reuseConnection,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// HTTPHealthCheck specifies HTTP health check configuration
+	HTTPHealthCheck *HTTPHealthCheckSpec `json:"httpHealthCheck,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// TCPHealthCheck specifies TCP health check configuration
+	TCPHealthCheck *TCPHealthCheckSpec `json:"tcpHealthCheck,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// GRPCHealthCheck specifies gRPC health check configuration
+	GRPCHealthCheck *GRPCHealthCheckSpec `json:"grpcHealthCheck,omitempty"`
+}
+
+// HTTPHealthCheckSpec defines HTTP health check configuration
+type HTTPHealthCheckSpec struct {
+	// +kubebuilder:validation:Required
+	// Path specifies the HTTP path for health checks
+	Path string `json:"path"`
+
+	// +kubebuilder:validation:Optional
+	// Host specifies the value of the host header in the HTTP health check request
+	Host string `json:"host,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// RequestHeadersToAdd specifies headers to add to health check requests
+	RequestHeadersToAdd []HeaderValueOptionSpec `json:"requestHeadersToAdd,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// ExpectedStatuses specifies the expected HTTP status codes for a successful health check
+	ExpectedStatuses []HTTPStatusRangeSpec `json:"expectedStatuses,omitempty"`
+}
+
+// TCPHealthCheckSpec defines TCP health check configuration
+type TCPHealthCheckSpec struct {
+	// +kubebuilder:validation:Optional
+	// Send specifies the bytes to send during TCP health check
+	Send []byte `json:"send,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// Receive specifies the bytes expected in response during TCP health check
+	Receive [][]byte `json:"receive,omitempty"`
+}
+
+// GRPCHealthCheckSpec defines gRPC health check configuration
+type GRPCHealthCheckSpec struct {
+	// +kubebuilder:validation:Optional
+	// ServiceName specifies the service name to use in gRPC health checks
+	ServiceName string `json:"serviceName,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// Authority specifies the :authority header value to use in gRPC health checks
+	Authority string `json:"authority,omitempty"`
+}
+
+// HeaderValueOptionSpec defines header value configuration
+type HeaderValueOptionSpec struct {
+	// +kubebuilder:validation:Required
+	Header HeaderValueSpec `json:"header"`
+
+	// +kubebuilder:validation:Optional
+	Append bool `json:"append,omitempty"`
+}
+
+// HeaderValueSpec defines header name and value
+type HeaderValueSpec struct {
+	// +kubebuilder:validation:Required
+	Key string `json:"key"`
+
+	// +kubebuilder:validation:Required
+	Value string `json:"value"`
+}
+
+// HTTPStatusRangeSpec defines HTTP status code range
+type HTTPStatusRangeSpec struct {
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=100
+	// +kubebuilder:validation:Maximum=599
+	Start int64 `json:"start"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=100
+	// +kubebuilder:validation:Maximum=599
+	End int64 `json:"end"`
+}
+
 type ClusterSpec struct {
 	Name            string               `json:"name"`
 	Type            string               `json:"type"`
@@ -29,6 +140,8 @@ type ClusterSpec struct {
 	ConnectTimeout  string               `json:"connectTimeout,omitempty"`
 	TransportSocket *TransportSocketSpec `json:"transportSocket,omitempty"`
 	LoadAssignment  *LoadAssignmentSpec  `json:"loadAssignment,omitempty"`
+	// +kubebuilder:validation:Optional
+	HealthCheck *HealthCheckSpec `json:"healthCheck,omitempty"`
 }
 
 // FilterSpec defines the Envoy filter configuration

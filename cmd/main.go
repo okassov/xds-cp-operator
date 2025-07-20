@@ -30,7 +30,8 @@ func main() {
 	utilruntime.Must(api.AddToScheme(scheme))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
+		Scheme:             scheme,
+		MetricsBindAddress: ":8082", // Changed from default :8080 to avoid conflict
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start manager: %v\n", err)
