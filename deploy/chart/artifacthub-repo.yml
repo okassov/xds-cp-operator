@@ -1,0 +1,10 @@
+# Artifact Hub repository metadata file
+#
+# https://github.com/artifacthub/hub/blob/master/docs/metadata/artifacthub-repo.yml
+#
+repositoryID: f8f8f8f8-f8f8-f8f8-f8f8-f8f8f8f8f8f8
+owners: # (optional, used to claim repository ownership)
+  - name: okassov
+    email: marat.okassov@gmail.com
+ignore:
+  - templates/tests/* 

@@ -1,0 +1,175 @@
+name: Publish Helm Chart
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  publish-chart:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: '3.14.0'
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+
+    - name: Extract version from tag
+      id: version
+      run: |
+        # Extract version from tag (remove 'v' prefix)
+        VERSION=${GITHUB_REF#refs/tags/v}
+        
+        # Validate semantic version format
+        if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+          echo "❌ Invalid semantic version: $VERSION"
+          echo "Expected format: X.Y.Z, X.Y.Z-prerelease, or X.Y.Z+buildmeta"
+          exit 1
+        fi
+        
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "🏷️ Extracted version: $VERSION"
+
+    - name: Update Chart version
+      run: |
+        # Update Chart.yaml with the extracted version
+        VERSION=${{ steps.version.outputs.VERSION }}
+        
+        # Update version field
+        sed -i.bak "s/^version:.*/version: $VERSION/" deploy/chart/Chart.yaml
+        
+        # Update appVersion field to match
+        sed -i.bak "s/^appVersion:.*/appVersion: \"$VERSION\"/" deploy/chart/Chart.yaml
+        
+        echo "📝 Updated Chart.yaml:"
+        grep -E "^(version|appVersion):" deploy/chart/Chart.yaml
+
+    - name: Package Helm Chart
+      run: |
+        # Create charts directory
+        mkdir -p charts
+        
+        # Package the chart
+        helm package deploy/chart/ -d charts/
+        
+        # Generate index.yaml
+        helm repo index charts/ --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        
+        echo "📦 Packaged charts:"
+        ls -la charts/
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: charts/
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+  update-readme:
+    runs-on: ubuntu-latest
+    needs: publish-chart
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: main
+
+    - name: Get release version
+      id: get_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "🏷️ Release version: $VERSION"
+
+    - name: Update README with latest release
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        HELM_REPO_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+        
+        # Update or add Helm installation section
+        if ! grep -q "## Helm Installation" README.md; then
+          cat >> README.md << EOF
+        
+        ## Helm Installation
+        
+        ### Add Helm Repository
+        
+        \`\`\`bash
+        helm repo add xds-cp-operator ${HELM_REPO_URL}
+        helm repo update
+        \`\`\`
+        
+        ### Install the Operator
+        
+        \`\`\`bash
+        # Latest stable version
+        helm install xds-cp-operator xds-cp-operator/xds-cp-operator \\
+          --namespace xds-system \\
+          --create-namespace
+        
+        # Specific version (${VERSION})
+        helm install xds-cp-operator xds-cp-operator/xds-cp-operator \\
+          --namespace xds-system \\
+          --create-namespace \\
+          --version ${VERSION}
+        
+        # With custom values
+        helm install xds-cp-operator xds-cp-operator/xds-cp-operator \\
+          --namespace xds-system \\
+          --create-namespace \\
+          --set image.tag=${VERSION} \\
+          --set xdsService.type=LoadBalancer
+        \`\`\`
+        
+        ### Available Versions
+        
+        \`\`\`bash
+        helm search repo xds-cp-operator/xds-cp-operator --versions
+        \`\`\`
+        
+        EOF
+        else
+          # Update existing installation examples with new version
+          sed -i.bak "s/--set image\.tag=[^[:space:]]*/--set image.tag=${VERSION}/" README.md
+          sed -i.bak "s/--version [^[:space:]]*/--version ${VERSION}/" README.md
+        fi
+        
+        echo "✅ README.md updated with release version: ${VERSION}"
+
+    - name: Commit README updates
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        if git diff --quiet README.md; then
+          echo "ℹ️ No changes to README.md"
+        else
+          git add README.md
+          git commit -m "docs: update README with v${{ steps.get_version.outputs.VERSION }} release info [skip ci]"
+          git push origin main
+        fi 
