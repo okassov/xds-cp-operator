@@ -40,7 +40,7 @@ import (
 	// Access loggers
 	accesslog "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
 	file_access_log "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/file/v3"
-
+	listener_proxy_protocol "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/listener/proxy_protocol/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -491,7 +491,20 @@ func (r *XDSControlPlaneReconciler) buildCluster(ctx context.Context, c api.Clus
 func (r *XDSControlPlaneReconciler) buildListener(l api.ListenerSpec) (*listener.Listener, error) {
 	lf := make([]*listener.ListenerFilter, 0, len(l.ListenerFilters))
 	for _, f := range l.ListenerFilters {
-		lf = append(lf, &listener.ListenerFilter{Name: f})
+		listenerFilter := &listener.ListenerFilter{Name: f.Name}
+
+		// Add typed config if provided
+		if len(f.TypedConfig.Raw) > 0 {
+			anyCfg, err := r.jsonToAny(f.Name, f.TypedConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert listener filter config: %w", err)
+			}
+			listenerFilter.ConfigType = &listener.ListenerFilter_TypedConfig{
+				TypedConfig: anyCfg,
+			}
+		}
+
+		lf = append(lf, listenerFilter)
 	}
 
 	fc := make([]*listener.FilterChain, 0, len(l.FilterChains))
@@ -669,6 +682,13 @@ func (r *XDSControlPlaneReconciler) jsonToAny(typeURL string, in apiextensionsv1
 		}
 		return anypb.New(&msg)
 
+	case "type.googleapis.com/envoy.extensions.filters.listener.proxy_protocol.v3.ProxyProtocol":
+		var msg listener_proxy_protocol.ProxyProtocol
+		if err := protojson.Unmarshal(filteredJSON, &msg); err != nil {
+			log.Error(err, "failed to unmarshal listener_proxy_protocol config")
+			return nil, fmt.Errorf("failed to unmarshal listener_proxy_protocol config: %w", err)
+		}
+		return anypb.New(&msg)
 	default:
 		log.Info("Unknown typeURL, trying generic protobuf conversion", "typeURL", typeURL)
 		// For unknown types, create Any with the JSON data as value

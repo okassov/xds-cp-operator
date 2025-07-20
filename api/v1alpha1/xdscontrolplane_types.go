@@ -43,13 +43,19 @@ type FilterChainSpec struct {
 
 // ListenerSpec defines the Envoy listener configuration
 type ListenerSpec struct {
-	Name            string            `json:"name"`
-	Address         string            `json:"address"`
-	Port            int               `json:"port"`
-	ListenerFilters []string          `json:"listenerFilters,omitempty"`
-	FilterChains    []FilterChainSpec `json:"filterChains"`
+	Name            string               `json:"name"`
+	Address         string               `json:"address"`
+	Port            int                  `json:"port"`
+	ListenerFilters []ListenerFilterSpec `json:"listenerFilters,omitempty"`
+	FilterChains    []FilterChainSpec    `json:"filterChains"`
 	// +kubebuilder:validation:Optional
 	AccessLog []AccessLogSpec `json:"accessLog,omitempty"`
+}
+
+// ListenerFilterSpec defines the listener filter configuration
+type ListenerFilterSpec struct {
+	Name        string               `json:"name"`
+	TypedConfig apiextensionsv1.JSON `json:"typedConfig,omitempty"`
 }
 
 // AccessLogSpec defines access log configuration

@@ -14,6 +14,7 @@ spec:
     - envoy-proxy-1
     - envoy-proxy-2
   listeners:
+    # HTTP listener without proxy protocol
     - name: ingress_http
       address: 0.0.0.0
       port: 80
@@ -45,6 +46,46 @@ spec:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
                 stat_prefix: ingress_http
                 cluster: nodeport-30080
+
+    # HTTP listener WITH downstream proxy protocol (from load balancer)
+    - name: ingress_http_with_proxy_protocol
+      address: 0.0.0.0
+      port: 8080
+      # Listener filters for incoming proxy protocol
+      listenerFilters:
+        - name: envoy.filters.listener.proxy_protocol
+          typedConfig:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.proxy_protocol.v3.ProxyProtocol
+      accessLog:
+        - name: envoy.access_loggers.file
+          typedConfig:
+            "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+            path: /var/log/envoy/access_http_pp.log
+            log_format:
+              json_format:
+                time: "%START_TIME%"
+                protocol: "%PROTOCOL%"
+                duration: "%DURATION%"
+                bytes_received: "%BYTES_RECEIVED%"
+                bytes_sent: "%BYTES_SENT%"
+                downstream_local_address: "%DOWNSTREAM_LOCAL_ADDRESS%"
+                downstream_remote_address: "%DOWNSTREAM_REMOTE_ADDRESS%"
+                upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
+                upstream_host: "%UPSTREAM_HOST%"
+                upstream_transport_failure_reason: "%UPSTREAM_TRANSPORT_FAILURE_REASON%"
+                response_flags: "%RESPONSE_FLAGS%"
+                connection_termination_details: "%CONNECTION_TERMINATION_DETAILS%"
+                requested_server_name: "%REQUESTED_SERVER_NAME%"
+                filter_chain_name: "%FILTER_CHAIN_NAME%"
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typedConfig:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: ingress_http_pp
+                cluster: nodeport-30080
+
+    # HTTPS listener with both downstream AND upstream proxy protocol
     - name: ingress_https
       address: 0.0.0.0
       port: 443
