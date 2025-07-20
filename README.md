@@ -297,3 +297,41 @@ Current version: v1.0.0
 - ✅ Production-ready operator patterns
 - ✅ Comprehensive documentation
 
+
+## Helm Installation
+
+### Add Helm Repository
+
+```bash
+helm repo add xds-cp-operator https://okassov.github.io/xds-cp-operator/
+helm repo update
+```
+
+### Install the Operator
+
+```bash
+# Latest stable version
+helm install xds-cp-operator xds-cp-operator/xds-cp-operator \
+  --namespace xds-system \
+  --create-namespace
+
+# Specific version (1.2.1)
+helm install xds-cp-operator xds-cp-operator/xds-cp-operator \
+  --namespace xds-system \
+  --create-namespace \
+  --version 1.2.1
+
+# With custom values
+helm install xds-cp-operator xds-cp-operator/xds-cp-operator \
+  --namespace xds-system \
+  --create-namespace \
+  --set image.tag=1.2.1 \
+  --set xdsService.type=LoadBalancer
+```
+
+### Available Versions
+
+```bash
+helm search repo xds-cp-operator/xds-cp-operator --versions
+```
+
